@@ -98,12 +98,16 @@ func writeKubernetesResources() {
 		// Get the file basename from its full path
 		basename := file[strings.LastIndex(file, "/")+1:]
 
+		// fmt.Println("DEBUG BASENAME: %s", basename)
+
 		// Get api resource group from file name
+		// TODO: fix this to better account for x.yaml files (e.g., pods.yaml)
 		apiResourceGroup := strings.TrimSuffix(strings.SplitN(basename, ".", 2)[1], ".yaml")
 
 		// Write out api resource groups that break path in database
 		switch apiResourceGroup {
-		case "apps",
+		case "yaml",
+			"apps",
 			"certificates.k8s.io",
 			"coordination.k8s.io",
 			"extensions",
@@ -114,6 +118,8 @@ func writeKubernetesResources() {
 			"snapshot.storage.k8s.io":
 			apiResourceGroup = ""
 		}
+
+		// fmt.Println("DEBUG APIRESOURCEGROUP: %s", apiResourceGroup)
 
 		// Get api resource name from file name
 		apiResourceName := strings.SplitN(basename, ".", 2)[0]
@@ -133,6 +139,8 @@ func writeKubernetesResources() {
 		case "podsecuritypolicies":
 			apiResourceName = "podsecuritypolicy"
 		}
+
+		// fmt.Println("DEBUG APIRESOURCENAME: %s", apiResourceName)
 
 		// Open file as read-only
 		f, err := os.OpenFile(file, os.O_RDONLY, 0444)
