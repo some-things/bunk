@@ -21,6 +21,8 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -67,48 +69,114 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("up called")
 
-		f, err := os.OpenFile("/Users/dn/Documents/logs/tickets/beta-test/bundle-20200217T015050/cluster-data/api-resources/nodes.yaml", os.O_RDONLY, 0444)
+		apiResourcesDir := "/Users/dn/Documents/logs/tickets/beta-test/bundle-20200217T015050/cluster-data/api-resources"
 
+		var files []string
+		// Find yaml files in directory -- Maybe clean this up a bit in the future
+		err := filepath.Walk(apiResourcesDir, func(path string, info os.FileInfo, err error) error {
+			if filepath.Ext(path) == ".yaml" {
+				files = append(files, path)
+				// basenames = append(files, info.Name())
+				return nil
+			}
+			return nil
+		})
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		defer f.Close()
+		// Set base resourceID to something out of range
+		var resourceID int = 100000000
 
-		content, err := ioutil.ReadAll(f)
-		if err != nil {
-			log.Fatal(err)
-		}
+		// For each yaml file in apiresources dir
+		for _, file := range files {
+			// Get the file basename from its full path
+			basename := file[strings.LastIndex(file, "/")+1:]
 
-		var kubernetesItems KubernetesItems
-		err = yaml.Unmarshal(content, &kubernetesItems)
-		if err != nil {
-			log.Fatal(err)
-		}
+			// Get api resource group from file name
+			apiResourceGroup := strings.TrimRight(strings.SplitN(basename, ".", 2)[1], ".yaml")
 
-		for i := 0; i < len(kubernetesItems.Items); i++ {
-			objectJSON, err := json.Marshal(kubernetesItems.Items[i])
+			// Write out api resource groups that break path in database
+			switch apiResourceGroup {
+			case "apps", "certificates.k8s.io", "coordination.k8s.io", "extensions", "networking.k8s.io", "rbac.authorization.k8s.io", "scheduling.k8s.io", "storage.k8s.io", "snapshot.storage.k8s.io":
+				apiResourceGroup = ""
+			}
+
+			// Open file as read-only
+			f, err := os.OpenFile(file, os.O_RDONLY, 0444)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			fullObjectJSON := objectJSON
+			// Close file when finished
+			defer f.Close()
 
-			var kubernetesObject KubernetesObject
-
-			err = json.Unmarshal(objectJSON, &kubernetesObject)
+			// Read the file
+			content, err := ioutil.ReadAll(f)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			name := kubernetesObject.Metadata.Name
-			fmt.Println("Name: ", name)
-			if kubernetesObject.Metadata.Namespace != "" {
-				namespace := kubernetesObject.Metadata.Namespace
-				fmt.Println("Namespace: ", namespace)
+			// Unmarshal yaml to json
+			var kubernetesItems KubernetesItems
+			err = yaml.Unmarshal(content, &kubernetesItems)
+			if err != nil {
+				log.Fatal(err)
 			}
 
-			fmt.Printf("%s\n\n", fullObjectJSON)
+			// For each item in the Kubernetes resource file
+			for i := 0; i < len(kubernetesItems.Items); i++ {
+				// Marshal the json items to individual []byte
+				objectJSON, err := json.Marshal(kubernetesItems.Items[i])
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				// Save the raw JSON []byte so that we can unmarshal it later on and also preserve it raw
+				// fullObjectJSON := objectJSON
+
+				var kubernetesObject KubernetesObject
+
+				// Unmarshal json to kubernetes object struct to write as sql statements
+				err = json.Unmarshal(objectJSON, &kubernetesObject)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				// Filter name and namespace
+				// name := kubernetesObject.Metadata.Name
+				// fmt.Println("Name: ", name)
+				// if kubernetesObject.Metadata.Namespace != "" {
+				// 	namespace := kubernetesObject.Metadata.Namespace
+				// 	fmt.Println("Namespace: ", namespace)
+				// }
+
+				// Print the full object json
+				// fmt.Printf("%s\n\n", fullObjectJSON)
+
+				// var sqlInsertStatement string
+				// var apiResourceName string
+				// var apiResourceNamespaced bool
+				// var objectState []byte
+				// var objectName string
+				// var objectNamespace string
+
+				// objectState = fullObjectJSON
+				// objectName = kubernetesObject.Metadata.Name
+
+				// INSERT INTO kine(id, name, created, deleted, create_revision, prev_revision, lease, value, old_value) VALUES($RESOURCE_ID, '/registry/$API_RESOURCE_GROUP/$API_RESOURCE_NAME/$NAMESPACE/$ITEMNAME', 1, 0, $((RESOURCE_ID + 1)), $((RESOURCE_ID + 2)), 0, '$ITEMSTATE', '$ITEMSTATE');
+
+				sqlInsertStatement := fmt.Sprintf(
+					"INSERT INTO kine(id, name, created, deleted, create_revision, prev_revision, lease, value, old_value)"+
+						"VALUES(%d, '/registry/\n",
+					resourceID)
+
+				resourceID++
+
+				// if
+
+				fmt.Printf("%s", sqlInsertStatement)
+			}
 		}
 	},
 }
