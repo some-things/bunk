@@ -16,6 +16,7 @@ limitations under the License.
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -44,17 +45,17 @@ type KubernetesObject struct {
 }
 
 // DatabaseObject : Structure of each item in the k3d SQLite3 backend database
-type DatabaseObject struct {
-	id             int
-	name           string
-	created        int
-	deleted        int
-	createRevision int
-	prevRevision   int
-	lease          int
-	value          string
-	oldValue       string
-}
+// type DatabaseObject struct {
+// 	id             int
+// 	name           string
+// 	created        int
+// 	deleted        int
+// 	createRevision int
+// 	prevRevision   int
+// 	lease          int
+// 	value          string
+// 	oldValue       string
+// }
 
 // upCmd represents the up command
 var upCmd = &cobra.Command{
@@ -67,7 +68,7 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("up called")
+		// fmt.Println("up called")
 
 		writeKubernetesResources()
 	},
@@ -81,7 +82,6 @@ func writeKubernetesResources() {
 	err := filepath.Walk(apiResourcesDir, func(path string, info os.FileInfo, err error) error {
 		if filepath.Ext(path) == ".yaml" {
 			files = append(files, path)
-			// basenames = append(files, info.Name())
 			return nil
 		}
 		return nil
@@ -91,7 +91,7 @@ func writeKubernetesResources() {
 	}
 
 	// Set base resourceID to something out of range
-	var resourceID int = 100000000
+	resourceID := 100000000
 
 	// For each yaml file in apiresources dir
 	for _, file := range files {
@@ -99,11 +99,19 @@ func writeKubernetesResources() {
 		basename := file[strings.LastIndex(file, "/")+1:]
 
 		// Get api resource group from file name
-		apiResourceGroup := strings.TrimRight(strings.SplitN(basename, ".", 2)[1], ".yaml")
+		apiResourceGroup := strings.TrimSuffix(strings.SplitN(basename, ".", 2)[1], ".yaml")
 
 		// Write out api resource groups that break path in database
 		switch apiResourceGroup {
-		case "apps", "certificates.k8s.io", "coordination.k8s.io", "extensions", "networking.k8s.io", "rbac.authorization.k8s.io", "scheduling.k8s.io", "storage.k8s.io", "snapshot.storage.k8s.io":
+		case "apps",
+			"certificates.k8s.io",
+			"coordination.k8s.io",
+			"extensions",
+			"networking.k8s.io",
+			"rbac.authorization.k8s.io",
+			"scheduling.k8s.io",
+			"storage.k8s.io",
+			"snapshot.storage.k8s.io":
 			apiResourceGroup = ""
 		}
 
@@ -125,8 +133,6 @@ func writeKubernetesResources() {
 		case "podsecuritypolicies":
 			apiResourceName = "podsecuritypolicy"
 		}
-
-		fmt.Printf("APIRESOURCENAME: %s\n", apiResourceName)
 
 		// Open file as read-only
 		f, err := os.OpenFile(file, os.O_RDONLY, 0444)
@@ -153,13 +159,30 @@ func writeKubernetesResources() {
 		// For each item in the Kubernetes resource file
 		for i := 0; i < len(kubernetesItems.Items); i++ {
 			// Marshal the json items to individual []byte
-			objectJSON, err := json.Marshal(kubernetesItems.Items[i])
+			// objectJSON, err := json.Marshal(kubernetesItems.Items[i])
+			// if err != nil {
+			// 	log.Fatal(err)
+			// }
+
+			// enc := json.NewEncoder(os.Stdout)
+			// enc.SetEscapeHTML(false)
+			// err = enc.Encode(objectJSON)
+			// if err != nil {
+			// 	log.Fatal(err)
+			// }
+
+			buffer := &bytes.Buffer{}
+			enc := json.NewEncoder(buffer)
+			enc.SetEscapeHTML(false)
+			err := enc.Encode(kubernetesItems.Items[i])
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			// Save the raw JSON []byte so that we can unmarshal it later on and also preserve it raw
-			objectState := objectJSON
+			objectJSON := buffer.Bytes()
+
+			// Preserve the raw JSON []byte and trim newline for printing >:(
+			objectState := []byte(strings.TrimSuffix(string(objectJSON), "\n"))
 
 			var kubernetesObject KubernetesObject
 
@@ -168,14 +191,6 @@ func writeKubernetesResources() {
 			if err != nil {
 				log.Fatal(err)
 			}
-
-			// Filter name and namespace
-			// name := kubernetesObject.Metadata.Name
-			// fmt.Println("Name: ", name)
-			// if kubernetesObject.Metadata.Namespace != "" {
-			// 	namespace := kubernetesObject.Metadata.Namespace
-			// 	fmt.Println("Namespace: ", namespace)
-			// }
 
 			// Print the full object json
 			// fmt.Printf("%s\n\n", objectState)
@@ -190,10 +205,8 @@ func writeKubernetesResources() {
 			objectName := kubernetesObject.Metadata.Name
 			objectNamespace := kubernetesObject.Metadata.Namespace
 
-			// INSERT INTO kine(id, name, created, deleted, create_revision, prev_revision, lease, value, old_value) VALUES($RESOURCE_ID, '/registry/$API_RESOURCE_GROUP/$API_RESOURCE_NAME/$NAMESPACE/$ITEMNAME', 1, 0, $((RESOURCE_ID + 1)), $((RESOURCE_ID + 2)), 0, '$ITEMSTATE', '$ITEMSTATE');
-
 			sqlInsertStatement = fmt.Sprintf(
-				"INSERT INTO kine(id, name, created, deleted, create_revision, prev_revision, lease, value, old_value)"+
+				"INSERT INTO kine(id, name, created, deleted, create_revision, prev_revision, lease, value, old_value) "+
 					"VALUES(%d, '/registry/",
 				resourceID)
 
@@ -210,10 +223,14 @@ func writeKubernetesResources() {
 				sqlInsertStatement += fmt.Sprintf("%s/", objectNamespace)
 			}
 
+			// Escape objectState s/\'/\'\'/g as string and convert back to byte
+			objectState = []byte(strings.ReplaceAll(string(objectState), "'", "''"))
+
 			// Add required additional fields
 			sqlInsertStatement += fmt.Sprintf("%s', 1, 0, %d, %d, 0, '%s', '%s');", objectName, resourceID+1, resourceID+2, objectState, objectState)
 
-			// Increment resourceID (I think 3 is sufficient -- test this)
+			// Increment resourceID
+			// TODO: I think 3 is sufficient -- need to test this
 			resourceID += 4
 
 			fmt.Printf("%s\n", sqlInsertStatement)
