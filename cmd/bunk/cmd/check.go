@@ -24,7 +24,7 @@ import (
 // checkCmd represents the check command
 var checkCmd = &cobra.Command{
 	Use:   "check",
-	Short: "A brief description of your command",
+	Short: "Run checks against a bundle to find errors, misconfigurations, etc.",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
