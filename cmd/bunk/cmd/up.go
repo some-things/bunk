@@ -60,7 +60,7 @@ type KubernetesObject struct {
 // upCmd represents the up command
 var upCmd = &cobra.Command{
 	Use:   "up",
-	Short: "A brief description of your command",
+	Short: "Create a kbk cluster for a bundle",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
@@ -75,7 +75,7 @@ to quickly create a Cobra application.`,
 }
 
 func writeKubernetesResources() {
-	apiResourcesDir := "/Users/dn/Documents/logs/tickets/beta-test/bundle-20200217T015050/cluster-data/api-resources"
+	apiResourcesDir := "/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/cluster-data/api-resources"
 
 	var files []string
 	// Find yaml files in directory -- Maybe clean this up a bit in the future
@@ -140,108 +140,114 @@ func writeKubernetesResources() {
 			apiResourceName = "podsecuritypolicy"
 		}
 
-		// fmt.Println("DEBUG APIRESOURCENAME: %s", apiResourceName)
-
-		// Open file as read-only
-		f, err := os.OpenFile(file, os.O_RDONLY, 0444)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Close file when finished
-		defer f.Close()
-
-		// Read the file
-		content, err := ioutil.ReadAll(f)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Unmarshal yaml to json
-		var kubernetesItems KubernetesItems
-		err = yaml.Unmarshal(content, &kubernetesItems)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// For each item in the Kubernetes resource file
-		for i := 0; i < len(kubernetesItems.Items); i++ {
-			// Marshal the json items to individual []byte
-			// objectJSON, err := json.Marshal(kubernetesItems.Items[i])
-			// if err != nil {
-			// 	log.Fatal(err)
-			// }
-
-			// enc := json.NewEncoder(os.Stdout)
-			// enc.SetEscapeHTML(false)
-			// err = enc.Encode(objectJSON)
-			// if err != nil {
-			// 	log.Fatal(err)
-			// }
-
-			buffer := &bytes.Buffer{}
-			enc := json.NewEncoder(buffer)
-			enc.SetEscapeHTML(false)
-			err := enc.Encode(kubernetesItems.Items[i])
+		// Ignore secrets file, as it is not valid yaml
+		if apiResourceName == "secrets" {
+			continue
+		} else {
+			// Begin parsing yaml to create sql statements
+			// Open file as read-only
+			f, err := os.OpenFile(file, os.O_RDONLY, 0444)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			objectJSON := buffer.Bytes()
+			// Close file when finished
+			defer f.Close()
 
-			// Preserve the raw JSON []byte and trim newline for printing >:(
-			objectState := []byte(strings.TrimSuffix(string(objectJSON), "\n"))
-
-			var kubernetesObject KubernetesObject
-
-			// Unmarshal json to kubernetes object struct to write as sql statements
-			err = json.Unmarshal(objectJSON, &kubernetesObject)
+			// Read the file
+			content, err := ioutil.ReadAll(f)
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			// Print the full object json
-			// fmt.Printf("%s\n\n", objectState)
-
-			var sqlInsertStatement string = ""
-			// var apiResourceName string
-			// var apiResourceNamespaced bool
-			// var objectState []byte
-			// var objectName string
-			// var objectNamespace string
-
-			objectName := kubernetesObject.Metadata.Name
-			objectNamespace := kubernetesObject.Metadata.Namespace
-
-			sqlInsertStatement = fmt.Sprintf(
-				"INSERT INTO kine(id, name, created, deleted, create_revision, prev_revision, lease, value, old_value) "+
-					"VALUES(%d, '/registry/",
-				resourceID)
-
-			// Add api resource group to path if it exists
-			if apiResourceGroup != "" {
-				sqlInsertStatement += fmt.Sprintf("%s/", apiResourceGroup)
+			// Unmarshal yaml to json
+			var kubernetesItems KubernetesItems
+			err = yaml.Unmarshal(content, &kubernetesItems)
+			if err != nil {
+				log.Fatal(err)
 			}
 
-			// Add api resource name
-			sqlInsertStatement += fmt.Sprintf("%s/", apiResourceName)
+			// For each item in the Kubernetes resource file
+			for i := 0; i < len(kubernetesItems.Items); i++ {
+				// Marshal the json items to individual []byte
+				// objectJSON, err := json.Marshal(kubernetesItems.Items[i])
+				// if err != nil {
+				// 	log.Fatal(err)
+				// }
 
-			// Add namespace if it exists
-			if objectNamespace != "" {
-				sqlInsertStatement += fmt.Sprintf("%s/", objectNamespace)
+				// enc := json.NewEncoder(os.Stdout)
+				// enc.SetEscapeHTML(false)
+				// err = enc.Encode(objectJSON)
+				// if err != nil {
+				// 	log.Fatal(err)
+				// }
+
+				buffer := &bytes.Buffer{}
+				enc := json.NewEncoder(buffer)
+				enc.SetEscapeHTML(false)
+				err := enc.Encode(kubernetesItems.Items[i])
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				objectJSON := buffer.Bytes()
+
+				// Preserve the raw JSON []byte and trim newline for printing >:(
+				objectState := []byte(strings.TrimSuffix(string(objectJSON), "\n"))
+
+				var kubernetesObject KubernetesObject
+
+				// Unmarshal json to kubernetes object struct to write as sql statements
+				err = json.Unmarshal(objectJSON, &kubernetesObject)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				// Print the full object json
+				// fmt.Printf("%s\n\n", objectState)
+
+				var sqlInsertStatement string = ""
+				// var apiResourceName string
+				// var apiResourceNamespaced bool
+				// var objectState []byte
+				// var objectName string
+				// var objectNamespace string
+
+				objectName := kubernetesObject.Metadata.Name
+				objectNamespace := kubernetesObject.Metadata.Namespace
+
+				sqlInsertStatement = fmt.Sprintf(
+					"INSERT INTO kine(id, name, created, deleted, create_revision, prev_revision, lease, value, old_value) "+
+						"VALUES(%d, '/registry/",
+					resourceID)
+
+				// Add api resource group to path if it exists
+				if apiResourceGroup != "" {
+					sqlInsertStatement += fmt.Sprintf("%s/", apiResourceGroup)
+				}
+
+				// Add api resource name
+				sqlInsertStatement += fmt.Sprintf("%s/", apiResourceName)
+
+				// Add namespace if it exists
+				if objectNamespace != "" {
+					sqlInsertStatement += fmt.Sprintf("%s/", objectNamespace)
+				}
+
+				// Escape objectState s/\'/\'\'/g as string and convert back to byte
+				objectState = []byte(strings.ReplaceAll(string(objectState), "'", "''"))
+
+				// Add required additional fields
+				sqlInsertStatement += fmt.Sprintf("%s', 1, 0, %d, %d, 0, '%s', '%s');", objectName, resourceID+1, resourceID+2, objectState, objectState)
+
+				// Increment resourceID
+				// TODO: I think 3 is sufficient -- need to test this
+				resourceID += 4
+
+				fmt.Printf("%s\n", sqlInsertStatement)
+
+				// http://go-database-sql.org/modifying.html
 			}
-
-			// Escape objectState s/\'/\'\'/g as string and convert back to byte
-			objectState = []byte(strings.ReplaceAll(string(objectState), "'", "''"))
-
-			// Add required additional fields
-			sqlInsertStatement += fmt.Sprintf("%s', 1, 0, %d, %d, 0, '%s', '%s');", objectName, resourceID+1, resourceID+2, objectState, objectState)
-
-			// Increment resourceID
-			// TODO: I think 3 is sufficient -- need to test this
-			resourceID += 4
-
-			fmt.Printf("%s\n", sqlInsertStatement)
 		}
 	}
 }
