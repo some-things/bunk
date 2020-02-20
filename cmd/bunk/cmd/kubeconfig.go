@@ -24,7 +24,7 @@ import (
 // kubeconfigCmd represents the kubeconfig command
 var kubeconfigCmd = &cobra.Command{
 	Use:   "kubeconfig",
-	Short: "A brief description of your command",
+	Short: "Display the kubeconfig file location for a kbk cluster",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
