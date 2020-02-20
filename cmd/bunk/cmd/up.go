@@ -16,15 +16,20 @@ limitations under the License.
 package cmd
 
 import (
+	"bufio"
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/fatih/color"
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 )
@@ -71,6 +76,7 @@ to quickly create a Cobra application.`,
 		// fmt.Println("up called")
 
 		writeKubernetesResources()
+		createKubernetesCluster()
 	},
 }
 
@@ -89,6 +95,11 @@ func writeKubernetesResources() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Set test sql file for writing
+	testfile := "/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql"
+	// Kill the file because we're lazy atm :)
+	os.Remove(testfile)
 
 	// Set base resourceID to something out of range
 	resourceID := 100000000
@@ -167,6 +178,18 @@ func writeKubernetesResources() {
 				log.Fatal(err)
 			}
 
+			// Pretty colors rock!
+			green := color.New(color.FgGreen).PrintfFunc()
+			yellow := color.New(color.FgYellow).PrintfFunc()
+			// red := color.New(color.FgRed).PrintFunc()
+
+			// Give the people some nice output
+			if len(kubernetesItems.Items) == 0 {
+				yellow("Skipping empty %s resource file: %s\n", apiResourceName, basename)
+			} else {
+				green("Writing %d %s resources from file: %s\n", len(kubernetesItems.Items), apiResourceName, basename)
+			}
+
 			// For each item in the Kubernetes resource file
 			for i := 0; i < len(kubernetesItems.Items); i++ {
 				// Marshal the json items to individual []byte
@@ -177,7 +200,7 @@ func writeKubernetesResources() {
 
 				// enc := json.NewEncoder(os.Stdout)
 				// enc.SetEscapeHTML(false)
-				// err = enc.Encode(objectJSON)
+				// err := enc.Encode(objectJSON)
 				// if err != nil {
 				// 	log.Fatal(err)
 				// }
@@ -244,12 +267,168 @@ func writeKubernetesResources() {
 				// TODO: I think 3 is sufficient -- need to test this
 				resourceID += 4
 
-				fmt.Printf("%s\n", sqlInsertStatement)
-
-				// http://go-database-sql.org/modifying.html
+				// Open file; write the file; close the file; if closing file fails, then sad panda
+				sqlFile, err := os.OpenFile(testfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				if err != nil {
+					log.Fatal(err)
+				}
+				if _, err := sqlFile.Write([]byte(sqlInsertStatement + "\n")); err != nil {
+					sqlFile.Close() // ignore error; Write error takes precedence
+					log.Fatal(err)
+				}
+				if err := sqlFile.Close(); err != nil {
+					log.Fatal(err)
+				}
+				// Close the file when done
+				defer sqlFile.Close()
 			}
+
+			// /Users/dn/go/src/github.com/some-things/bunk/cmd/bunk
+
+			// http://go-database-sql.org/modifying.html
+
 		}
+
 	}
+}
+
+func createKubernetesCluster() {
+	// k3d create \
+	// --name "${CLUSTER_NAME}" \
+	// --workers 0 \
+	// --volume "${API_RESOURCES_DIR}/.kbk/db:/var/lib/rancher/k3s/server/db/" \
+	// --server-arg --disable-agent \
+	// --server-arg --no-deploy=coredns \
+	// --server-arg --no-deploy=servicelb \
+	// --server-arg --no-deploy=traefik \
+	// --server-arg --no-deploy=local-storage \
+	// --server-arg --no-deploy=metrics-server \
+	// --server-arg --kube-apiserver-arg=event-ttl=168h0m0s \
+	// --server-arg --kube-controller-arg=disable-attach-detach-reconcile-sync \
+	// --server-arg --kube-controller-arg=controllers=-attachdetach,-clusterrole-aggregation,-cronjob,-csrapproving,-csrcleaner,-csrsigning,-daemonset,-deployment,-disruption,-endpoint,-garbagecollector,-horizontalpodautoscaling,-job,-namespace,-nodeipam,-nodelifecycle,-persistentvolume-binder,-persistentvolume-expander,-podgc,-pv-protection,-pvc-protection,-replicaset,-replicationcontroller,-resourcequota,-root-ca-cert-publisher,-serviceaccount,-serviceaccount-token,-statefulset,-ttl \
+	// --server-arg --disable-scheduler \
+	// --server-arg --disable-cloud-controller \
+	// --server-arg --disable-network-policy \
+	// --server-arg --no-flannel \
+	// --wait 60
+
+	// err := os.MkdirAll("/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db", 755)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	fmt.Println("Creating k3d cluster")
+	cmd := exec.Command("k3d",
+		"create",
+		"--workers", "0",
+		"--volume", "/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db:/var/lib/rancher/k3s/server/db/",
+		"--server-arg", "--disable-agent",
+		"--server-arg", "--no-deploy=coredns",
+		"--server-arg", "--no-deploy=servicelb",
+		"--server-arg", "--no-deploy=traefik",
+		"--server-arg", "--no-deploy=local-storage",
+		"--server-arg", "--no-deploy=metrics-server",
+		"--server-arg", "--kube-apiserver-arg=event-ttl=168h0m0s",
+		"--server-arg", "--kube-controller-arg=disable-attach-detach-reconcile-sync",
+		"--server-arg", "--kube-controller-arg=controllers=-attachdetach,-clusterrole-aggregation,-cronjob,-csrapproving,-csrcleaner,-csrsigning,-daemonset,-deployment,-disruption,-endpoint,-garbagecollector,-horizontalpodautoscaling,-job,-namespace,-nodeipam,-nodelifecycle,-persistentvolume-binder,-persistentvolume-expander,-podgc,-pv-protection,-pvc-protection,-replicaset,-replicationcontroller,-resourcequota,-root-ca-cert-publisher,-serviceaccount,-serviceaccount-token,-statefulset,-ttl",
+		"--server-arg", "--disable-scheduler",
+		"--server-arg", "--disable-cloud-controller",
+		"--server-arg", "--disable-network-policy",
+		"--server-arg", "--no-flannel",
+		"--wait", "60",
+	)
+	err := cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// fmt.Println("Waiting 5 sec to continue...")
+	// time.Sleep(5 * time.Second)
+
+	fmt.Println("Stopping k3d cluster")
+	cmd = exec.Command("k3d",
+		"stop",
+		"--all",
+	)
+	err = cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// fmt.Println("Waiting 5 sec to continue...")
+	// time.Sleep(5 * time.Second)
+
+	fmt.Println("Adding cluster resources")
+
+	database, err := sql.Open("sqlite3", "/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db/state.db")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer database.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// kubernetesSQLBackendData, err := ioutil.ReadFile("/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	kubernetesSQLBackendData, err := os.Open("/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql")
+	if err != nil {
+		log.Fatalf("Failed opening file: %s", err)
+	}
+
+	scanner := bufio.NewScanner(kubernetesSQLBackendData)
+	scanner.Split(bufio.ScanLines)
+	var txtlines []string
+
+	for scanner.Scan() {
+		txtlines = append(txtlines, scanner.Text())
+	}
+
+	kubernetesSQLBackendData.Close()
+
+	for _, eachline := range txtlines {
+		statement, err := database.Prepare(eachline)
+		if err != nil {
+			log.Fatal(err)
+		}
+		statement.Exec()
+	}
+
+	// fmt.Println("Waiting 5 sec to continue...")
+	// time.Sleep(5 * time.Second)
+
+	fmt.Println("Starting k3d cluster")
+	cmd = exec.Command("k3d",
+		"start",
+		"--all",
+	)
+	err = cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// cmd = exec.Command("cat",
+	// 	"/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql",
+	// 	"|",
+	// 	"sqlite3",
+	// 	"/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db/state.db",
+	// )
+	// err = cmd.Run()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	fmt.Printf("k3d cluster created! Please access the cluster with:\nexport KUBECONFIG=\"$(k3d get-kubeconfig --name='k3s-default')\"\n")
+
+	// This doesn't work as expected
+	// err = os.Setenv("KUBECONFIG", "$(k3d get-kubeconfig --name='k3s-default')")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 }
 
 func init() {
