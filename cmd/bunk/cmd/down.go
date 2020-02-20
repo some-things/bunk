@@ -17,6 +17,9 @@ package cmd
 
 import (
 	"fmt"
+	"log"
+	"os"
+	"os/exec"
 
 	"github.com/spf13/cobra"
 )
@@ -24,7 +27,7 @@ import (
 // downCmd represents the down command
 var downCmd = &cobra.Command{
 	Use:   "down",
-	Short: "A brief description of your command",
+	Short: "Destroy a kbk cluster for a bundle",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
@@ -33,7 +36,32 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("down called")
+
+		deleteKubernetesCluster()
 	},
+}
+
+func deleteKubernetesCluster() {
+	cmd := exec.Command("k3d",
+		"delete",
+		"--all",
+	)
+	err := cmd.Run()
+	if err != nil {
+		log.Println(err)
+	} else {
+		// This doesn't work
+		// err = os.Unsetenv("KUBECONFIG")
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		fmt.Printf("k3d cluster deleted!\n")
+	}
+
+	err = os.RemoveAll("/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk")
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func init() {
