@@ -24,7 +24,7 @@ import (
 // extractCmd represents the extract command
 var extractCmd = &cobra.Command{
 	Use:   "extract",
-	Short: "A brief description of your command",
+	Short: "Extract a compressed bundle",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
