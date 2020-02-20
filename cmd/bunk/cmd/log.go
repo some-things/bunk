@@ -24,7 +24,7 @@ import (
 // logCmd represents the log command
 var logCmd = &cobra.Command{
 	Use:   "log",
-	Short: "A brief description of your command",
+	Short: "Display the logs for a pod",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 
