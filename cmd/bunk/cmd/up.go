@@ -75,10 +75,39 @@ to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// fmt.Println("up called")
 
+		// preflight()
 		writeKubernetesResources()
 		createKubernetesCluster()
 	},
 }
+
+var apiResourcesDir string
+
+// func preflight() {
+// 	workDir, err := os.Getwd()
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+
+// 	fmt.Printf("Workdir: %s\n", workDir)
+
+// 	err = filepath.Walk(workDir, func(path string, info os.FileInfo, err error) error {
+// 		if err != nil {
+// 			log.Fatalf("Failure accessing path %q: %v\n", path, err)
+// 			return err
+// 		}
+// 		if info.IsDir() && info.Name() == "api-resources" {
+// 			fmt.Printf("Found api-resources directory: %+v \n", info.Name())
+// 			fmt.Printf("api-resources path: %s\n", path)
+// 			apiResourcesDir = path
+// 		}
+// 		// fmt.Printf("visited %s file or dir: %q\n", info.Name(), path)
+// 		return nil
+// 	})
+// 	if err != nil {
+// 		log.Fatalf("Error walking the path %q: %v\n", workDir, err)
+// 	}
+// }
 
 func writeKubernetesResources() {
 	apiResourcesDir := "/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/cluster-data/api-resources"
@@ -282,41 +311,11 @@ func writeKubernetesResources() {
 				// Close the file when done
 				defer sqlFile.Close()
 			}
-
-			// /Users/dn/go/src/github.com/some-things/bunk/cmd/bunk
-
-			// http://go-database-sql.org/modifying.html
-
 		}
-
 	}
 }
 
 func createKubernetesCluster() {
-	// k3d create \
-	// --name "${CLUSTER_NAME}" \
-	// --workers 0 \
-	// --volume "${API_RESOURCES_DIR}/.kbk/db:/var/lib/rancher/k3s/server/db/" \
-	// --server-arg --disable-agent \
-	// --server-arg --no-deploy=coredns \
-	// --server-arg --no-deploy=servicelb \
-	// --server-arg --no-deploy=traefik \
-	// --server-arg --no-deploy=local-storage \
-	// --server-arg --no-deploy=metrics-server \
-	// --server-arg --kube-apiserver-arg=event-ttl=168h0m0s \
-	// --server-arg --kube-controller-arg=disable-attach-detach-reconcile-sync \
-	// --server-arg --kube-controller-arg=controllers=-attachdetach,-clusterrole-aggregation,-cronjob,-csrapproving,-csrcleaner,-csrsigning,-daemonset,-deployment,-disruption,-endpoint,-garbagecollector,-horizontalpodautoscaling,-job,-namespace,-nodeipam,-nodelifecycle,-persistentvolume-binder,-persistentvolume-expander,-podgc,-pv-protection,-pvc-protection,-replicaset,-replicationcontroller,-resourcequota,-root-ca-cert-publisher,-serviceaccount,-serviceaccount-token,-statefulset,-ttl \
-	// --server-arg --disable-scheduler \
-	// --server-arg --disable-cloud-controller \
-	// --server-arg --disable-network-policy \
-	// --server-arg --no-flannel \
-	// --wait 60
-
-	// err := os.MkdirAll("/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db", 755)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
 	fmt.Println("Creating k3d cluster")
 	cmd := exec.Command("k3d",
 		"create",
