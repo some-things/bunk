@@ -73,44 +73,92 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// fmt.Println("up called")
-
-		// preflight()
-		writeKubernetesResources()
-		createKubernetesCluster()
+		// log.Println("up called")
+		up()
 	},
 }
 
-var apiResourcesDir string
+func getBundleRootDir() string {
+	var bundleRootDir string
+	var cutString string
 
-// func preflight() {
-// 	workDir, err := os.Getwd()
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
+	// Set bundle dir; prio env var > cwd path
+	// TODO: Reevaluate this priority
+	if os.Getenv("BUNK_BUNDLE_DIR") != "" {
+		bundleRootDir = os.Getenv("BUNK_BUNDLE_DIR")
+	} else {
+		workDir, err := os.Getwd()
+		if err != nil {
+			log.Fatalf("Failed to get work dir: %s\n", err)
+		}
 
-// 	fmt.Printf("Workdir: %s\n", workDir)
+		// Split workdir path to find dir prefixed with 'bundle-'
+		s := strings.SplitAfter(workDir, "/")
+		for i := len(s) - 1; i >= 0; i-- {
+			if strings.HasPrefix(s[i], "bundle-") == true {
+				bundleRootDir = strings.TrimRight(workDir, cutString)
+				break
+			} else if s[i] != "/" {
+				cutString += s[i]
+			} else {
+				log.Fatalf("Failed to find bundle root in work dir path: %s\n", workDir)
+			}
+		}
+	}
+	bundleRootDir = strings.TrimSuffix(bundleRootDir, "/")
 
-// 	err = filepath.Walk(workDir, func(path string, info os.FileInfo, err error) error {
-// 		if err != nil {
-// 			log.Fatalf("Failure accessing path %q: %v\n", path, err)
-// 			return err
-// 		}
-// 		if info.IsDir() && info.Name() == "api-resources" {
-// 			fmt.Printf("Found api-resources directory: %+v \n", info.Name())
-// 			fmt.Printf("api-resources path: %s\n", path)
-// 			apiResourcesDir = path
-// 		}
-// 		// fmt.Printf("visited %s file or dir: %q\n", info.Name(), path)
-// 		return nil
-// 	})
-// 	if err != nil {
-// 		log.Fatalf("Error walking the path %q: %v\n", workDir, err)
-// 	}
+	return bundleRootDir
+}
+
+func getAPIResourcesDir(bundleRootDir string) string {
+	var apiResourcesDir string
+
+	err := filepath.Walk(bundleRootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Fatalf("Failure accessing path %q: %v\n", path, err)
+			return err
+		}
+		if info.IsDir() && info.Name() == "api-resources" {
+			apiResourcesDir = path
+		}
+		// log.Printf("visited %s file or dir: %q\n", info.Name(), path)
+		return nil
+	})
+	if err != nil {
+		log.Fatalf("Error walking the path %q: %v\n", bundleRootDir, err)
+	}
+
+	if apiResourcesDir == "" {
+		log.Fatalf("Failed to find api-resources dir within bundle directory: %s\n", bundleRootDir)
+	}
+
+	return apiResourcesDir
+}
+
+// func preflight() (string, string) {
+
+// 	bundleRootDir := getBundleRootDir()
+// 	apiResourcesDir := getAPIResourcesDir(bundleRootDir)
+
+// 	log.Printf("api-resources dir: %s\n", apiResourcesDir)
+
+// 	return bundleRootDir, apiResourceDir
 // }
 
-func writeKubernetesResources() {
-	apiResourcesDir := "/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/cluster-data/api-resources"
+func initConfigDir(bundleRootDir string) string {
+	err := os.Mkdir(bundleRootDir+"/.kbk", 0774)
+	if err != nil {
+		log.Fatalf("Failed to create .kbk directory at %s: %s\n", bundleRootDir, err)
+	}
+	resourceDir := bundleRootDir + "/.kbk"
+	return resourceDir
+}
+
+func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, resourceDir string) string {
+	// Set sql file for writing
+	kubernetesResourcesSQL := resourceDir + "/kubernetesResources.sql"
+	// Set base resourceID to something out of range
+	resourceID := 100000000
 
 	var files []string
 	// Find yaml files in directory -- Maybe clean this up a bit in the future
@@ -125,20 +173,16 @@ func writeKubernetesResources() {
 		log.Fatal(err)
 	}
 
-	// Set test sql file for writing
-	testfile := "/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql"
 	// Kill the file because we're lazy atm :)
-	os.Remove(testfile)
-
-	// Set base resourceID to something out of range
-	resourceID := 100000000
+	// TODO: remove this
+	os.Remove(kubernetesResourcesSQL)
 
 	// For each yaml file in apiresources dir
 	for _, file := range files {
 		// Get the file basename from its full path
 		basename := file[strings.LastIndex(file, "/")+1:]
 
-		// fmt.Println("DEBUG BASENAME: %s", basename)
+		// log.Println("DEBUG BASENAME: %s", basename)
 
 		// Get api resource group from file name
 		// TODO: fix this to better account for x.yaml files (e.g., pods.yaml)
@@ -159,7 +203,7 @@ func writeKubernetesResources() {
 			apiResourceGroup = ""
 		}
 
-		// fmt.Println("DEBUG APIRESOURCEGROUP: %s", apiResourceGroup)
+		// log.Println("DEBUG APIRESOURCEGROUP: %s", apiResourceGroup)
 
 		// Get api resource name from file name
 		apiResourceName := strings.SplitN(basename, ".", 2)[0]
@@ -256,7 +300,7 @@ func writeKubernetesResources() {
 				}
 
 				// Print the full object json
-				// fmt.Printf("%s\n\n", objectState)
+				// log.Printf("%s\n\n", objectState)
 
 				var sqlInsertStatement string = ""
 				// var apiResourceName string
@@ -297,7 +341,7 @@ func writeKubernetesResources() {
 				resourceID += 4
 
 				// Open file; write the file; close the file; if closing file fails, then sad panda
-				sqlFile, err := os.OpenFile(testfile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+				sqlFile, err := os.OpenFile(kubernetesResourcesSQL, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -313,14 +357,16 @@ func writeKubernetesResources() {
 			}
 		}
 	}
+
+	return kubernetesResourcesSQL
 }
 
-func createKubernetesCluster() {
-	fmt.Println("Creating k3d cluster")
+func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) {
+	log.Println("Creating k3d cluster")
 	cmd := exec.Command("k3d",
 		"create",
 		"--workers", "0",
-		"--volume", "/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db:/var/lib/rancher/k3s/server/db/",
+		"--volume", resourceDir+"/db:/var/lib/rancher/k3s/server/db/",
 		"--server-arg", "--disable-agent",
 		"--server-arg", "--no-deploy=coredns",
 		"--server-arg", "--no-deploy=servicelb",
@@ -341,10 +387,7 @@ func createKubernetesCluster() {
 		log.Fatal(err)
 	}
 
-	// fmt.Println("Waiting 5 sec to continue...")
-	// time.Sleep(5 * time.Second)
-
-	fmt.Println("Stopping k3d cluster")
+	log.Println("Stopping k3d cluster")
 	cmd = exec.Command("k3d",
 		"stop",
 		"--all",
@@ -354,12 +397,9 @@ func createKubernetesCluster() {
 		log.Fatal(err)
 	}
 
-	// fmt.Println("Waiting 5 sec to continue...")
-	// time.Sleep(5 * time.Second)
+	log.Println("Adding cluster resources")
 
-	fmt.Println("Adding cluster resources")
-
-	database, err := sql.Open("sqlite3", "/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db/state.db")
+	database, err := sql.Open("sqlite3", resourceDir+"/db/state.db")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -369,12 +409,7 @@ func createKubernetesCluster() {
 		log.Fatal(err)
 	}
 
-	// kubernetesSQLBackendData, err := ioutil.ReadFile("/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	kubernetesSQLBackendData, err := os.Open("/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql")
+	kubernetesSQLBackendData, err := os.Open(kubernetesResourcesSQL)
 	if err != nil {
 		log.Fatalf("Failed opening file: %s", err)
 	}
@@ -397,10 +432,7 @@ func createKubernetesCluster() {
 		statement.Exec()
 	}
 
-	// fmt.Println("Waiting 5 sec to continue...")
-	// time.Sleep(5 * time.Second)
-
-	fmt.Println("Starting k3d cluster")
+	log.Println("Starting k3d cluster")
 	cmd = exec.Command("k3d",
 		"start",
 		"--all",
@@ -410,24 +442,20 @@ func createKubernetesCluster() {
 		log.Fatal(err)
 	}
 
-	// cmd = exec.Command("cat",
-	// 	"/Users/dn/go/src/github.com/some-things/bunk/cmd/bunk/test.sql",
-	// 	"|",
-	// 	"sqlite3",
-	// 	"/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk/db/state.db",
-	// )
-	// err = cmd.Run()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	log.Printf("k3d cluster created! Please access the cluster with:\nexport KUBECONFIG=\"$(k3d get-kubeconfig --name='k3s-default')\"\n")
+}
 
-	fmt.Printf("k3d cluster created! Please access the cluster with:\nexport KUBECONFIG=\"$(k3d get-kubeconfig --name='k3s-default')\"\n")
+func up() {
+	bundleRootDir := getBundleRootDir()
+	apiResourcesDir := getAPIResourcesDir(bundleRootDir)
+	resourceDir := initConfigDir(bundleRootDir)
 
-	// This doesn't work as expected
-	// err = os.Setenv("KUBECONFIG", "$(k3d get-kubeconfig --name='k3s-default')")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	log.Printf("Bundle root dir: %s\n", bundleRootDir)
+	log.Printf("api-resources dir: %s\n", apiResourcesDir)
+
+	kubernetesResourcesSQL := writeKubernetesResources(bundleRootDir, apiResourcesDir, resourceDir)
+
+	createKubernetesCluster(kubernetesResourcesSQL, resourceDir)
 }
 
 func init() {
