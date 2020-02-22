@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -35,9 +34,7 @@ Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("down called")
-
-		deleteKubernetesCluster()
+		down()
 	},
 }
 
@@ -48,20 +45,30 @@ func deleteKubernetesCluster() {
 	)
 	err := cmd.Run()
 	if err != nil {
-		log.Println(err)
+		log.Printf("Failed to remove k3d cluster: %s\n", err)
 	} else {
-		// This doesn't work
-		// err = os.Unsetenv("KUBECONFIG")
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		fmt.Printf("k3d cluster deleted!\n")
+		log.Printf("Successfully removed k3d cluster!\n")
 	}
+}
 
-	err = os.RemoveAll("/Users/dn/Documents/logs/tickets/17096/bundle-20200211T002751/.kbk")
-	if err != nil {
-		log.Fatal(err)
+func deleteResourceDir(resourceDir string) {
+	if _, err := os.Stat(resourceDir); os.IsNotExist(err) {
+		log.Printf("Failed to remove resource directory: %s\n", err)
+	} else {
+		err := os.RemoveAll(resourceDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Successfully removed resource directory!\n")
 	}
+}
+
+func down() {
+	bundleRootDir := getBundleRootDir()
+	resourceDir := bundleRootDir + "/.kbk"
+
+	deleteKubernetesCluster()
+	deleteResourceDir(resourceDir)
 }
 
 func init() {
