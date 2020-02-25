@@ -16,7 +16,6 @@ limitations under the License.
 package cmd
 
 import (
-	"bufio"
 	"bytes"
 	"database/sql"
 	"encoding/json"
@@ -158,7 +157,7 @@ func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, reso
 	// Set sql file for writing
 	kubernetesResourcesSQL := resourceDir + "/kubernetesResources.sql"
 	// Set base resourceID to something out of range
-	resourceID := 100000000
+	resourceID := 5000
 
 	var files []string
 	// Find yaml files in directory -- Maybe clean this up a bit in the future
@@ -246,8 +245,7 @@ func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, reso
 
 			// Unmarshal yaml to json
 			var kubernetesItems KubernetesItems
-			err = yaml.Unmarshal(content, &kubernetesItems)
-			if err != nil {
+			if err := yaml.Unmarshal(content, &kubernetesItems); err != nil {
 				log.Fatal(err)
 			}
 
@@ -294,8 +292,7 @@ func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, reso
 				var kubernetesObject KubernetesObject
 
 				// Unmarshal json to kubernetes object struct to write as sql statements
-				err = json.Unmarshal(objectJSON, &kubernetesObject)
-				if err != nil {
+				if err := json.Unmarshal(objectJSON, &kubernetesObject); err != nil {
 					log.Fatal(err)
 				}
 
@@ -308,7 +305,6 @@ func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, reso
 				// var objectState []byte
 				// var objectName string
 				// var objectNamespace string
-
 				objectName := kubernetesObject.Metadata.Name
 				objectNamespace := kubernetesObject.Metadata.Namespace
 
@@ -349,11 +345,12 @@ func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, reso
 					sqlFile.Close() // ignore error; Write error takes precedence
 					log.Fatal(err)
 				}
-				if err := sqlFile.Close(); err != nil {
-					log.Fatal(err)
-				}
+
 				// Close the file when done
-				defer sqlFile.Close()
+				// This must be explicit or we will hit too many open files
+				if err := sqlFile.Close(); err != nil {
+					log.Fatalf("Failed to close sql file: %v", err)
+				}
 			}
 		}
 	}
@@ -382,8 +379,7 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 		"--server-arg", "--no-flannel",
 		"--wait", "60",
 	)
-	err := cmd.Run()
-	if err != nil {
+	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -392,8 +388,7 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 		"stop",
 		"--all",
 	)
-	err = cmd.Run()
-	if err != nil {
+	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
 
@@ -405,31 +400,14 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 	}
 
 	defer database.Close()
-	if err != nil {
-		log.Fatal(err)
-	}
 
-	kubernetesSQLBackendData, err := os.Open(kubernetesResourcesSQL)
+	kubernetesSQLBackendData, err := ioutil.ReadFile(kubernetesResourcesSQL)
 	if err != nil {
 		log.Fatalf("Failed opening file: %s", err)
 	}
 
-	scanner := bufio.NewScanner(kubernetesSQLBackendData)
-	scanner.Split(bufio.ScanLines)
-	var txtlines []string
-
-	for scanner.Scan() {
-		txtlines = append(txtlines, scanner.Text())
-	}
-
-	kubernetesSQLBackendData.Close()
-
-	for _, eachline := range txtlines {
-		statement, err := database.Prepare(eachline)
-		if err != nil {
-			log.Fatal(err)
-		}
-		statement.Exec()
+	if result, err := database.Exec(string(kubernetesSQLBackendData)); err != nil {
+		log.Fatalf("Error executing query %v: %v", result, err)
 	}
 
 	log.Println("Starting k3d cluster")
@@ -437,8 +415,7 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 		"start",
 		"--all",
 	)
-	err = cmd.Run()
-	if err != nil {
+	if err := cmd.Run(); err != nil {
 		log.Fatal(err)
 	}
 
