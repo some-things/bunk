@@ -28,6 +28,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+	// Add sqlite3 driver
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
