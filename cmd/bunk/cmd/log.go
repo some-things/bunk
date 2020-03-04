@@ -16,8 +16,12 @@ limitations under the License.
 package cmd
 
 import (
-	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
 
@@ -31,9 +35,95 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
+	// Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("log called")
+		// fmt.Println("log called")
+
+		bundleRootDir := getBundleRootDir()
+		podLogsDir := getPodLogsDir(bundleRootDir)
+
+		// fmt.Println(podLogsDir)
+
+		listPodLogs(podLogsDir)
+
 	},
+}
+
+func getPodLogsDir(bundleRootDir string) string {
+	var podLogsDir string
+
+	err := filepath.Walk(bundleRootDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Fatalf("Failure accessing path %q: %v\n", path, err)
+			return err
+		}
+		if info.IsDir() && info.Name() == "pods_logs" {
+			podLogsDir = path
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatalf("Error walking the path %q: %v\n", bundleRootDir, err)
+	}
+
+	if podLogsDir == "" {
+		log.Fatalf("Failed to find pod logs dir within bundle directory: %s\n", bundleRootDir)
+	}
+
+	return podLogsDir
+}
+
+func listPodLogs(podLogsDir string) {
+	var files []string
+	// Find yaml files in directory -- Maybe clean this up a bit in the future
+	err := filepath.Walk(podLogsDir, func(path string, info os.FileInfo, err error) error {
+		if filepath.Ext(path) == ".log" {
+			files = append(files, path)
+			return nil
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	podList := [][]string{}
+	for _, file := range files {
+		podMetadata := strings.Split(strings.TrimSuffix(file[strings.LastIndex(file, "/")+1:], ".log"), "_")
+		podNamespace := podMetadata[0]
+		podName := podMetadata[1]
+
+		podList = append(podList, []string{podNamespace, podName})
+		// data[1] = append(data[1], podName)
+
+		// fmt.Printf("Pod log file name: %v\n", file)
+		// fmt.Printf("Pod namespace: %v\n", podNamespace)
+		// fmt.Printf("Pod name: %v\n", podName)
+
+	}
+
+	// data := [][]string{
+	// 	{"node1.example.com", "Ready", "compute", "1.11"},
+	// 	{"node2.example.com", "Ready", "compute", "1.11"},
+	// 	{"node3.example.com", "Ready", "compute", "1.11"},
+	// 	{"node4.example.com", "NotReady", "compute", "1.11"},
+	// }
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Namespace", "Name"})
+	table.SetAutoWrapText(false)
+	table.SetAutoFormatHeaders(true)
+	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetCenterSeparator("")
+	table.SetColumnSeparator("")
+	table.SetRowSeparator("")
+	table.SetHeaderLine(false)
+	table.SetBorder(false)
+	table.SetTablePadding("\t") // pad with tabs
+	table.SetNoWhiteSpace(true)
+	table.AppendBulk(podList) // Add Bulk Data
+	table.Render()
 }
 
 func init() {
