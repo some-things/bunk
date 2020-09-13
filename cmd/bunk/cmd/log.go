@@ -92,22 +92,13 @@ func listPodLogs(podLogsDir string) {
 		podMetadata := strings.Split(strings.TrimSuffix(file[strings.LastIndex(file, "/")+1:], ".log"), "_")
 		podNamespace := podMetadata[0]
 		podName := podMetadata[1]
-
 		podList = append(podList, []string{podNamespace, podName})
-		// data[1] = append(data[1], podName)
 
 		// fmt.Printf("Pod log file name: %v\n", file)
 		// fmt.Printf("Pod namespace: %v\n", podNamespace)
 		// fmt.Printf("Pod name: %v\n", podName)
 
 	}
-
-	// data := [][]string{
-	// 	{"node1.example.com", "Ready", "compute", "1.11"},
-	// 	{"node2.example.com", "Ready", "compute", "1.11"},
-	// 	{"node3.example.com", "Ready", "compute", "1.11"},
-	// 	{"node4.example.com", "NotReady", "compute", "1.11"},
-	// }
 
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Namespace", "Name"})
