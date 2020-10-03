@@ -16,8 +16,10 @@ limitations under the License.
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -35,17 +37,20 @@ and usage of using your command. For example:
 Cobra is a CLI library for Go that empowers applications.
 This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
-	// Args: cobra.ExactArgs(2),
+	Aliases: []string{"logs"},
+	Args:    cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		// fmt.Println("log called")
 
 		bundleRootDir := getBundleRootDir()
 		podLogsDir := getPodLogsDir(bundleRootDir)
 
-		// fmt.Println(podLogsDir)
-
-		listPodLogs(podLogsDir)
-
+		// TODO: Make this a true cobra nested subcommand instead
+		if len(args) == 0 || args[0] == "ls" || args[0] == "list" {
+			listPodLogs(podLogsDir)
+		} else {
+			viewPodLog(args, podLogsDir)
+		}
 	},
 }
 
@@ -115,6 +120,54 @@ func listPodLogs(podLogsDir string) {
 	table.SetNoWhiteSpace(true)
 	table.AppendBulk(podList) // Add Bulk Data
 	table.Render()
+}
+
+func viewPodLog(args []string, podLogsDir string) {
+	var files []string
+	// Find yaml files in directory -- Maybe clean this up a bit in the future
+	err := filepath.Walk(podLogsDir, func(path string, info os.FileInfo, err error) error {
+		if filepath.Ext(path) == ".log" {
+			files = append(files, path)
+			return nil
+		}
+		return nil
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var podLogFile string
+	for _, file := range files {
+		filePodMetadata := strings.Split(strings.TrimSuffix(file[strings.LastIndex(file, "/")+1:], ".log"), "_")
+		// podNamespace := filePodMetadata[0]
+		// podName := filePodMetadata[1]
+
+		if args[0] == filePodMetadata[0] && args[1] == filePodMetadata[1] {
+			// fmt.Printf("Pod match found!\n")
+			// fmt.Printf("Pod log file name: %v\n", file)
+			// fmt.Printf("Pod namespace: %v\n", filePodMetadata[0])
+			// fmt.Printf("Pod name: %v\n", filePodMetadata[1])
+			podLogFile = file
+		}
+	}
+
+	if podLogFile != "" {
+		pager := os.Getenv("PAGER")
+		if pager == "" {
+			pager = "less"
+		}
+
+		cmd := exec.Command(pager, podLogFile)
+		cmd.Stdout = os.Stdout
+
+		fmt.Printf("Opening pod log file: %v", podLogFile)
+		err := cmd.Run()
+		if err != nil {
+			log.Fatalf("Could not open %v in `%v`: %v", podLogFile, pager, err)
+		}
+	} else {
+		log.Fatalf("Could not find log file for %v pod in %v namespace.", args[1], args[0])
+	}
 }
 
 func init() {
