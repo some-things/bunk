@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/fatih/color"
@@ -399,10 +400,13 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 		log.Fatalf("Failed to get current user: %s", err)
 	}
 
-	// Fix directory permissions
-	cmd = exec.Command("/bin/sh", "-c", "sudo chown -R "+whoami.Username+" "+resourceDir+"/db")
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("Failed to chown directory to user %s: %s", whoami.Username, err)
+	// Fix directory permissions on linux
+	hostOS := runtime.GOOS
+	if hostOS == "linux" {
+		cmd = exec.Command("/bin/sh", "-c", "sudo chown -R "+whoami.Username+" "+resourceDir+"/db")
+		if err := cmd.Run(); err != nil {
+			log.Fatalf("Failed to chown directory to user %s: %s", whoami.Username, err)
+		}
 	}
 
 	log.Println("Adding cluster resources")
@@ -423,10 +427,12 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 		log.Fatalf("Error executing query %v: %v", result, err)
 	}
 
-	// Fix directory permissions
-	cmd = exec.Command("/bin/sh", "-c", "sudo chown -R root "+resourceDir+"/db")
-	if err := cmd.Run(); err != nil {
-		log.Fatalf("Failed to chown directory to user root: %s", err)
+	// Fix directory permissions on linux
+	if hostOS == "linux" {
+		cmd = exec.Command("/bin/sh", "-c", "sudo chown -R root "+resourceDir+"/db")
+		if err := cmd.Run(); err != nil {
+			log.Fatalf("Failed to chown directory to user root: %s", err)
+		}
 	}
 
 	log.Println("Starting k3d cluster")
