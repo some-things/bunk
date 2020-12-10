@@ -19,6 +19,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/user"
 
 	"github.com/spf13/cobra"
 )
@@ -55,8 +56,18 @@ func deleteResourceDir(resourceDir string) {
 	if _, err := os.Stat(resourceDir); os.IsNotExist(err) {
 		log.Printf("Failed to remove resource directory: %s\n", err)
 	} else {
-		err := os.RemoveAll(resourceDir)
+		whoami, err := user.Current()
 		if err != nil {
+			log.Fatalf("Failed to get current user: %s", err)
+		}
+
+		// Fix directory permissions
+		cmd := exec.Command("/bin/sh", "-c", "sudo chown -R "+whoami.Username+" "+resourceDir+"/db")
+		if err := cmd.Run(); err != nil {
+			log.Fatalf("Failed to chown directory to user %s: %s", whoami.Username, err)
+		}
+
+		if err := os.RemoveAll(resourceDir); err != nil {
 			log.Fatal(err)
 		}
 		log.Printf("Successfully removed resource directory!\n")

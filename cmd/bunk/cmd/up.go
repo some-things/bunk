@@ -24,6 +24,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -393,6 +394,17 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 		log.Fatal(err)
 	}
 
+	whoami, err := user.Current()
+	if err != nil {
+		log.Fatalf("Failed to get current user: %s", err)
+	}
+
+	// Fix directory permissions
+	cmd = exec.Command("/bin/sh", "-c", "sudo chown -R "+whoami.Username+" "+resourceDir+"/db")
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Failed to chown directory to user %s: %s", whoami.Username, err)
+	}
+
 	log.Println("Adding cluster resources")
 
 	database, err := sql.Open("sqlite3", resourceDir+"/db/state.db")
@@ -409,6 +421,12 @@ func createKubernetesCluster(kubernetesResourcesSQL string, resourceDir string) 
 
 	if result, err := database.Exec(string(kubernetesSQLBackendData)); err != nil {
 		log.Fatalf("Error executing query %v: %v", result, err)
+	}
+
+	// Fix directory permissions
+	cmd = exec.Command("/bin/sh", "-c", "sudo chown -R root "+resourceDir+"/db")
+	if err := cmd.Run(); err != nil {
+		log.Fatalf("Failed to chown directory to user root: %s", err)
 	}
 
 	log.Println("Starting k3d cluster")
