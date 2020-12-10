@@ -64,7 +64,7 @@ func deleteResourceDir(resourceDir string) {
 
 		// Fix directory permissions on linux
 		hostOS := runtime.GOOS
-		if hostOS == "linux" {
+		if _, err := os.Stat(resourceDir + "/db"); !os.IsNotExist(err) && hostOS == "linux" {
 			cmd := exec.Command("/bin/sh", "-c", "sudo chown -R "+whoami.Username+" "+resourceDir+"/db")
 			if err := cmd.Run(); err != nil {
 				log.Fatalf("Failed to chown directory to user %s: %s", whoami.Username, err)
