@@ -194,6 +194,7 @@ func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, reso
 		switch apiResourceGroup {
 		case "yaml",
 			"apps",
+			"batch",
 			"certificates.k8s.io",
 			"coordination.k8s.io",
 			"extensions",
@@ -205,7 +206,7 @@ func writeKubernetesResources(bundleRootDir string, apiResourcesDir string, reso
 			apiResourceGroup = ""
 		}
 
-		// log.Println("DEBUG APIRESOURCEGROUP: %s", apiResourceGroup)
+		// log.Println("Debug apiResourceGroup: " + apiResourceGroup)
 
 		// Get api resource name from file name
 		apiResourceName := strings.SplitN(basename, ".", 2)[0]
