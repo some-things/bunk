@@ -24,3 +24,7 @@ Notes.md
 *2019*
 *2020*
 app/
+
+# build
+bin/
+build.sh
